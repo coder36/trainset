@@ -1,12 +1,12 @@
 # Voxel Train Yard
 
-An animated HO-scale model railway built in voxel art, seen from the eye height of someone standing at the front of the table. Everything is in one HTML file: Three.js loads from a CDN, and all the models, textures and sounds are made in code.
+An animated HO-scale model railway built in voxel art, seen from the eye height of someone standing at the front of the table. Everything is in one HTML file (`index.html`): Three.js loads from a CDN, and all the models, textures and sounds are made in code.
 
-[![The layout at late afternoon, with an airliner banking over the harbour](screenshot.png)](https://coder36.github.io/trainset/trainyard.html)
+[![The layout at late afternoon, with an airliner banking over the harbour](screenshot.png)](https://coder36.github.io/trainset/)
 
 ## ▶ Open it in your browser
 
-**[Launch the train yard](https://coder36.github.io/trainset/trainyard.html)**
+**[Launch the train yard](https://coder36.github.io/trainset/)**
 
 The page is hosted on GitHub Pages. You can also click the screenshot above.
 
@@ -18,7 +18,7 @@ Browsers block ES-module import maps on `file://` pages, so serve the folder loc
 python3 -m http.server 8000
 ```
 
-Then open <http://localhost:8000/trainyard.html> in Chrome.
+Then open <http://localhost:8000/> in Chrome.
 
 ## What's on the layout
 
