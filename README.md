@@ -10,6 +10,35 @@ An animated HO-scale model railway built in voxel art, seen from the eye height 
 
 The page is hosted on GitHub Pages. You can also click the screenshot above.
 
+## Middlesbrough edition
+
+A second layout, [`middlesbrough.html`](https://coder36.github.io/trainset/middlesbrough.html), uses the same engine and fills the table with Middlesbrough.
+
+- **The Tees along the back.** The Tees Newport Bridge is in its 2014 red and silver, fixed down. A tug and a pleasure cruiser work the river, and a coaster loaded with steel is moored at Middlehaven. The north bank is lined with the Billingham and Seal Sands chemical works, whose flare stacks burn at night. The window looks out on chimneys, flare tips and the wind farm off Redcar.
+- **Rail.** A Northern Class 156 (two units, four cars) calls at a Gothic sandstone station with MIDDLESBROUGH and ERIMUS boards. A DB Cargo Class 66 hauls slab, coil and container wagons. A Class 08 shunts Tees Yard. Thornaby depot has its turntable, a Class 37 wearing the kingfisher emblem, and a visiting steam engine.
+- **Town.**
+  - The Town Hall, with its clock tower and crocketed spire.
+  - Centre Square, with the Bottle of Notes (white script outside, a blue spiral inside) and MIMA's glass front.
+  - The Old Town Hall at St Hilda's, in scaffolding for its restoration.
+  - Boho One, and a statue of John Vaughan.
+  - Linthorpe Road shops, including a PARMO takeaway, and the Empire lit up.
+  - Red-brick terraces with chimney stacks and wheelie bins.
+- **Parks and hills.**
+  - Albert Park, with its boating lake, Pease's fountain, the bandstand, and Brian Clough striding towards Ayresome Park with his boots over his shoulder.
+  - The Cenotaph in front of the Dorman Museum's green copper dome.
+  - Stewart Park, with the Captain Cook Birthplace Museum and the granite vase.
+  - The Ayresome Park estate, with the old pitch marked out and Pak Doo Ik's bronze puddle.
+  - Roseberry Topping, with its collapsed cliff face, and Captain Cook's Monument on Easby Moor.
+- **Steel.** A blast furnace with Cowper stoves and a skip incline, hot-metal torpedo ladles, and the DORMAN LONG tower.
+- **Middlehaven extension.**
+  - The Riverside Stadium, with the West Stand as the tallest. BORO and MFC are spelled out in white seats, and the south-east corner is left open for the big screen. Boro play Newcastle in front of a full crowd.
+  - The Ayresome Park gates, with Mannion and Hardwick facing each other, George Camsell, and the Borobrick Road.
+  - The dock clock tower, with faces on only three sides.
+  - Temenos.
+  - The blue Transporter Bridge, with its gondola carrying a car and passengers across to Port Clarence, plus the glass viewing lift.
+
+Some things are shown as they used to be, the way model railways often mix eras. The Dorman Long tower was demolished in 2021, the Transporter has been closed since 2019, and the Riverside's roof and floodlight details are simplified.
+
 ## Running it locally
 
 Browsers block ES-module import maps on `file://` pages, so serve the folder locally:
