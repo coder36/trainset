@@ -37,6 +37,13 @@ A second layout, [`middlesbrough.html`](https://coder36.github.io/trainset/middl
   - Temenos.
   - The blue Transporter Bridge, with its gondola carrying a car and passengers across to Port Clarence, plus the glass viewing lift.
 
+- **Teesside & Acklam extension** (left end).
+  - Teesside International, with runway 05/23. A KLM jet pushes back, taxis, backtracks and takes off to the north, flies a circuit over the whole layout and lands again.
+  - A Ryanair jet sits on the remote stand. There's also the terminal with its jet bridges, the control tower with its beacon, a hangar with a Draken Europe jet, the fire training ground and a windsock.
+  - Nearer the seam is Acklam: Acklam Hall and its avenue of trees, and red-brick semis on Trimdon Avenue.
+  - Foxes Wood, with its footpath, the beck and two footbridges, and foxes trotting round.
+  - Acklam Grange School and its playing field, where kids play a kick-about with jumpers for goalposts.
+
 Some things are shown as they used to be, the way model railways often mix eras. The Dorman Long tower was demolished in 2021, the Transporter has been closed since 2019, and the Riverside's roof and floodlight details are simplified.
 
 ## Running it locally
@@ -91,7 +98,7 @@ The controls are physical objects on the front of the table: drag the levers, an
 | Howay the lads | Get the home crowd roaring and jumping |
 | Layout view | Go back to the main view |
 
-**Camera:** drag empty space to look around, scroll to zoom, press **R** to reset the view, and press **V** (or use the buttons at top right) to step through the layout, airport and stadium views.
+**Camera:** drag to move across the table, right-drag (or Shift+drag) to orbit and tilt, and scroll to zoom in towards the pointer, right down to street level. On a touch screen, drag with one finger, and pinch or twist with two. Arrows or WASD move, Q/E turn, and +/- zoom. **R** resets to the current view, and **V** (or the buttons at top right) steps through the preset views.
 
 ## Notes
 

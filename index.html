@@ -22,7 +22,7 @@
 <body>
 <div id="load">Building the layout…</div>
 <div id="hud"><div id="clock">17:00</div>
-<div>Drag the levers · click switches &amp; buttons<br>Drag empty space to look around · scroll to zoom · R resets view · V changes view</div></div>
+<div>Drag the levers · click switches &amp; buttons<br>Drag to move · right-drag or Shift+drag to rotate · scroll to zoom<br>WASD/arrows move · Q/E turn · R resets · V changes view</div></div>
 <script type="module">
 import * as THREE from 'three';
 import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
@@ -1153,23 +1153,32 @@ function updatePanel(dt){
   }
 }
 
-/* ================= camera & pointer ================= */
-const EYE=new THREE.Vector3(0,75,188),AIM=new THREE.Vector3(0,-12,30);
-const VIEW={yaw:0,pitch:0,fov:55};
+/* ================= camera & pointer =================
+   Map-style controls: drag to move across the table, right-drag (or Shift+drag) to orbit and tilt, scroll to zoom
+   towards the pointer; on touch, one finger moves and two fingers pinch and twist. The camera orbits a target point. */
 // camera presets: 0 = main layout, 1 = airport extension, 2 = stadium extension
 const VIEWS=[{e:new THREE.Vector3(0,75,188),a:new THREE.Vector3(0,-12,30)},{e:new THREE.Vector3(212,72,196),a:new THREE.Vector3(252,-6,5)},
   {e:new THREE.Vector3(-222,86,162),a:new THREE.Vector3(-250,-17,6)}];
-const base0=new THREE.Vector3();
-function setView(i){SIM.view=i;VIEW.yaw=0;VIEW.pitch=0;}
+// orbit the point where the preset's line of sight meets the table top, so close zooms look at the model, not under it
+const orbitOf=v=>{const t=v.a.clone().sub(v.e).multiplyScalar(v.e.y/(v.e.y-v.a.y)).add(v.e),o=new THREE.Vector3().subVectors(v.e,t),d=o.length();
+  return {t,dist:d,yaw:Math.atan2(o.x,o.z),pitch:Math.asin(o.y/d)};};
+const CAM=orbitOf(VIEWS[0]),GOAL=orbitOf(VIEWS[0]);
+const LIM={x0:-318,x1:318,z0:-112,z1:124,dMin:10,dMax:460,pMin:6*DEG,pMax:88*DEG};
+function setView(i){SIM.view=i;Object.assign(GOAL,orbitOf(VIEWS[i]));}
+function clampGoal(){GOAL.t.x=clamp(GOAL.t.x,LIM.x0,LIM.x1);GOAL.t.z=clamp(GOAL.t.z,LIM.z0,LIM.z1);GOAL.dist=clamp(GOAL.dist,LIM.dMin,LIM.dMax);GOAL.pitch=clamp(GOAL.pitch,LIM.pMin,LIM.pMax);}
+let camT=performance.now();
 function updateCamera(){
-  EYE.lerp(VIEWS[SIM.view].e,.06);AIM.lerp(VIEWS[SIM.view].a,.06);
-  base0.subVectors(AIM,EYE).normalize();
-  camera.position.copy(EYE);camera.fov=lerp(camera.fov,VIEW.fov,.2);camera.updateProjectionMatrix();
-  const y=Math.atan2(base0.x,-base0.z)+VIEW.yaw,p=Math.asin(base0.y)+VIEW.pitch;
-  camera.lookAt(EYE.x+Math.sin(y)*Math.cos(p),EYE.y+Math.sin(p),EYE.z-Math.cos(y)*Math.cos(p));
+  const now=performance.now(),k=1-Math.exp(-Math.min(.1,(now-camT)/1000)*9);camT=now;
+  CAM.t.lerp(GOAL.t,k);CAM.dist=lerp(CAM.dist,GOAL.dist,k);CAM.pitch=lerp(CAM.pitch,GOAL.pitch,k);
+  let dy=GOAL.yaw-CAM.yaw;dy=Math.atan2(Math.sin(dy),Math.cos(dy));CAM.yaw+=dy*k;
+  const cp=Math.cos(CAM.pitch);
+  camera.position.set(CAM.t.x+Math.sin(CAM.yaw)*cp*CAM.dist,CAM.t.y+Math.sin(CAM.pitch)*CAM.dist,CAM.t.z+Math.cos(CAM.yaw)*cp*CAM.dist);
+  // stay inside the room and above the table
+  camera.position.x=clamp(camera.position.x,-316,316);camera.position.z=clamp(camera.position.z,-228,300);camera.position.y=clamp(camera.position.y,3,152);
+  camera.lookAt(CAM.t);
 }
 const ray=new THREE.Raycaster(),ndc=new THREE.Vector2();
-let drag=null,look=null;
+let drag=null;
 const cvs=renderer.domElement;
 function setNdc(e){ndc.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(ndc,camera);}
 function pickCtrl(e){setNdc(e);const h=ray.intersectObjects(hitTargets,false)[0];return h?h.object.userData.ctrl:null;}
@@ -1180,22 +1189,67 @@ function dragLever(L,e){
   const ang=clamp(Math.asin(clamp(-(zp-CZ)/6.5,-1,1)),-.6,.6);
   if(L.bi){let v=ang/.6;if(Math.abs(v)<.09)v=0;SIM[L.k]=v;}else SIM[L.k]=(ang/.6+1)/2;
 }
+// the point on the table top (y=0) under a screen position
+const tablePlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+function groundAt(x,y,out){ndc.set(x/innerWidth*2-1,-(y/innerHeight)*2+1);ray.setFromCamera(ndc,camera);
+  if(ray.ray.direction.y>-.02)return null;return ray.ray.intersectPlane(tablePlane,out);}
+// slide the target so the table point that was under (x0,y0) ends up under (x1,y1)
+const _pa=new THREE.Vector3(),_pb=new THREE.Vector3();
+function panBy(x0,y0,x1,y1){const a=groundAt(x0,y0,_pa);if(!a)return;const ax=a.x,az=a.z,b=groundAt(x1,y1,_pb);if(!b)return;
+  const dx=ax-b.x,dz=az-b.z;GOAL.t.x+=dx;GOAL.t.z+=dz;CAM.t.x+=dx;CAM.t.z+=dz;clampGoal();}
+function zoomAt(x,y,f){const p=groundAt(x,y,_pa),d0=GOAL.dist;GOAL.dist=clamp(d0*f,LIM.dMin,LIM.dMax);
+  if(p){const s=1-GOAL.dist/d0;GOAL.t.x+=(p.x-GOAL.t.x)*s;GOAL.t.z+=(p.z-GOAL.t.z)*s;}clampGoal();SIM.view=-1;}
+const touches=new Map();let nav=null;
+function beginNav(e){
+  touches.set(e.pointerId,{x:e.clientX,y:e.clientY});cvs.setPointerCapture(e.pointerId);
+  if(touches.size>=2){const [a,b]=[...touches.values()];nav={mode:'pinch',d:Math.hypot(a.x-b.x,a.y-b.y),ang:Math.atan2(b.y-a.y,b.x-a.x),mx:(a.x+b.x)/2,my:(a.y+b.y)/2};return;}
+  const orbit=e.button===2||e.button===1||e.shiftKey||e.ctrlKey||e.altKey;
+  nav={mode:orbit?'orbit':'pan',x:e.clientX,y:e.clientY};cvs.style.cursor=orbit?'move':'grabbing';SIM.view=-1;
+}
+function moveNav(e){
+  if(!touches.has(e.pointerId))return;touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(nav.mode==='pinch'){if(touches.size<2)return;const [a,b]=[...touches.values()],d=Math.hypot(a.x-b.x,a.y-b.y),ang=Math.atan2(b.y-a.y,b.x-a.x),mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
+    panBy(nav.mx,nav.my,mx,my);zoomAt(mx,my,nav.d/Math.max(d,1));GOAL.yaw-=ang-nav.ang;Object.assign(nav,{d,ang,mx,my});return;}
+  if(nav.mode==='orbit'){GOAL.yaw-=(e.clientX-nav.x)*.006;GOAL.pitch+=(e.clientY-nav.y)*.005;nav.x=e.clientX;nav.y=e.clientY;clampGoal();return;}
+  panBy(nav.x,nav.y,e.clientX,e.clientY);nav.x=e.clientX;nav.y=e.clientY;
+}
+cvs.addEventListener('contextmenu',e=>e.preventDefault());
 cvs.addEventListener('pointerdown',e=>{
-  ensureAudio();const c=pickCtrl(e);
+  ensureAudio();const c=touches.size?null:pickCtrl(e);
   if(c&&c.type==='lever'){drag=c;cvs.setPointerCapture(e.pointerId);cvs.style.cursor='grabbing';dragLever(c,e);}
   else if(c&&c.type==='toggle'){SIM[c.k]=!SIM[c.k];SND.thunk();}
   else if(c&&c.type==='button')pressButton(c);
-  else{look={x:e.clientX,y:e.clientY,yaw:VIEW.yaw,pitch:VIEW.pitch};cvs.setPointerCapture(e.pointerId);}
+  else beginNav(e);
 });
 cvs.addEventListener('pointermove',e=>{
   if(drag){dragLever(drag,e);return;}
-  if(look){const k=VIEW.fov/55*.0035;VIEW.yaw=clamp(look.yaw-(e.clientX-look.x)*k,-.95,.95);VIEW.pitch=clamp(look.pitch+(e.clientY-look.y)*k,-.55,.45);return;}
-  const c=pickCtrl(e);cvs.style.cursor=c?(c.type==='lever'?'grab':'pointer'):'default';
+  if(nav){moveNav(e);return;}
+  const c=pickCtrl(e);cvs.style.cursor=c?(c.type==='lever'?'grab':'pointer'):'grab';
 });
-const endDrag=e=>{drag=null;look=null;cvs.style.cursor='default';};
+const endDrag=e=>{drag=null;touches.delete(e.pointerId);
+  if(touches.size===1){const [p]=[...touches.values()];nav={mode:'pan',x:p.x,y:p.y};}else if(!touches.size)nav=null;cvs.style.cursor='grab';};
 cvs.addEventListener('pointerup',endDrag);cvs.addEventListener('pointercancel',endDrag);
-cvs.addEventListener('wheel',e=>{e.preventDefault();VIEW.fov=clamp(VIEW.fov+e.deltaY*.02,18,70);},{passive:false});
-addEventListener('keydown',e=>{if(e.key==='r'||e.key==='R'){VIEW.yaw=0;VIEW.pitch=0;VIEW.fov=55;}if(e.key==='v'||e.key==='V')setView((SIM.view+1)%VIEWS.length);});
+cvs.addEventListener('wheel',e=>{e.preventDefault();zoomAt(e.clientX,e.clientY,Math.exp(clamp(e.deltaY,-120,120)*.0015));},{passive:false});
+const keys=new Set();
+addEventListener('keydown',e=>{
+  if(e.key==='r'||e.key==='R')setView(Math.max(0,SIM.view));
+  if(e.key==='v'||e.key==='V')setView((SIM.view+1)%VIEWS.length);
+  if(e.key==='+'||e.key==='=')zoomAt(innerWidth/2,innerHeight/2,.8);
+  if(e.key==='-'||e.key==='_')zoomAt(innerWidth/2,innerHeight/2,1.25);
+  keys.add(e.key.toLowerCase());
+});
+addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
+addEventListener('blur',()=>keys.clear());
+// held keys: arrows/WASD move over the table, Q/E turn
+animators.push(dt=>{
+  let f=0,s=0,r=0;
+  if(keys.has('w')||keys.has('arrowup'))f++;if(keys.has('s')||keys.has('arrowdown'))f--;
+  if(keys.has('d')||keys.has('arrowright'))s++;if(keys.has('a')||keys.has('arrowleft'))s--;
+  if(keys.has('e'))r++;if(keys.has('q'))r--;
+  if(!f&&!s&&!r)return;
+  const sp=GOAL.dist*.9*dt,sy=Math.sin(GOAL.yaw),cy=Math.cos(GOAL.yaw);
+  GOAL.t.x+=(-sy*f+cy*s)*sp;GOAL.t.z+=(-cy*f-sy*s)*sp;GOAL.yaw-=r*dt*1.4;clampGoal();SIM.view=-1;
+});
 
 /* ================= AIRPORT EXTENSION (module bolted to the right end of the table) =================
    extension terrain spans x 186..310, z -100..100; runway along z at x=285 */
@@ -2054,7 +2108,7 @@ function frame(){
   if(first){first=false;document.getElementById('load').remove();}
   requestAnimationFrame(frame);
 }
-window.__SIM=SIM;window.__FL=FL;window.__MATCH=MATCH;window.__JET=jet;window.__VIEW=VIEW;window.__EYE=EYE;
+window.__SIM=SIM;window.__FL=FL;window.__MATCH=MATCH;window.__JET=jet;window.__CAM=CAM;
 const panelLamp=new THREE.PointLight(0xfff0d8,900,120,2);panelLamp.position.set(0,32,150);scene.add(panelLamp);
 updateCamera();requestAnimationFrame(frame);
 </script>
