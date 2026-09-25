@@ -30,6 +30,7 @@ Then open <http://localhost:8000/> in Chrome.
 - **Industry and fun.** A factory with smoking chimneys, grain silos, oil tanks, and a lumber yard with a forklift. There's also a fairground with a turning Ferris wheel and carousel.
 - **Farm and hill.** A farm with a turning windmill, crop fields and cows, and a wooded hill.
 - **Airport extension.** An extra table section bolted to the right end. It has a runway and taxiways, a terminal with jet bridges, a control tower with a rotating beacon, a hangar and a parking lot. An airliner pushes back from its gate, taxis, takes off, flies a circuit over the whole layout, lands and taxis back to its gate.
+- **St James' Park extension.** An extra table section bolted to the left end, modelled on Newcastle United's ground. The towering Milburn and Leazes stands share one L-shaped cantilever roof and spell out NEWCASTLE UNITED in white seats. The Gallowgate End is mid-height, with black and white striped seats and ST JAMES' PARK in lights on its facade. The low East Stand sits in front of the sandstone Leazes Terrace. Newcastle play Sunderland on the pitch in front of a full crowd, and the big screen in the corner shows the score. Away fans sit high in the Leazes Stand. Outside there are the Sir Bobby Robson memorial garden, the Alan Shearer statue, the St James' Metro entrance, a pub, flags, Leazes Park with its lake and bandstand, and a road with traffic running round the ground. At dusk the floodlights along the roof edges come on. The airliner's circuit now passes over the stadium too.
 - **Day and night.** The sun and moon move, and the window shows a changing sky with stars. After dark the street lamps, house windows, headlights, fairground bulbs and runway lights come on, with a soft glow.
 
 ## Controls
@@ -53,12 +54,20 @@ The controls are physical objects on the front of the table: drag the levers, an
 | Depart | Send the airliner now |
 | Layout view | Go back to the main view |
 
-**Camera:** drag empty space to look around, scroll to zoom, press **R** to reset the view, and press **V** (or use the button at top right) to switch between the layout view and the airport view.
+| Stadium box | What it does |
+|---|---|
+| Match day | Show or hide the players and the crowd |
+| Floodlights | Switch the floodlights on the roof edges |
+| Kick off | Start a new match at 0-0 |
+| Howay the lads | Get the home crowd roaring and jumping |
+| Layout view | Go back to the main view |
+
+**Camera:** drag empty space to look around, scroll to zoom, press **R** to reset the view, and press **V** (or use the buttons at top right) to step through the layout, airport and stadium views.
 
 ## Notes
 
 - Moving vehicles, trains, rides and the airliner all follow paths laid out to keep clear of the scenery. Trees and buildings are kept out of areas that are in use, so nothing passes through anything else.
-- A few objects are exposed on `window` for tinkering in the browser console, for example `__SIM.time = 21` to jump to night, or `__FL.request = true` to send the airliner.
+- A few objects are exposed on `window` for tinkering in the browser console, for example `__SIM.time = 21` to jump to night, `__FL.request = true` to send the airliner, or `__MATCH.score` to check the score.
 
 ## License
 

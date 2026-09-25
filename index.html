@@ -22,7 +22,7 @@
 <body>
 <div id="load">Building the layout…</div>
 <div id="hud"><div id="clock">17:00</div>
-<div>Drag the levers · click switches &amp; buttons<br>Drag empty space to look around · scroll to zoom · R resets view · V airport view</div></div>
+<div>Drag the levers · click switches &amp; buttons<br>Drag empty space to look around · scroll to zoom · R resets view · V changes view</div></div>
 <script type="module">
 import * as THREE from 'three';
 import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
@@ -1023,7 +1023,7 @@ function updateSmoke(dt){
 }
 
 /* ================= simulation state ================= */
-const SIM={thrA:.55,thrB:.45,sw:.5,timeRate:.3,street:true,bldg:true,room:false,stationStop:true,crane:true,fair:true,rwy:true,autoFly:true,view:0,traffic:1,time:17.2,jump:null};
+const SIM={thrA:.55,thrB:.45,sw:.5,timeRate:.3,street:true,bldg:true,room:false,stationStop:true,crane:true,fair:true,rwy:true,autoFly:true,match:true,flood:true,view:0,traffic:1,time:17.2,jump:null};
 
 /* ================= sound (synthesised) ================= */
 let AC=null;
@@ -1141,7 +1141,9 @@ function pressButton(B){
   else if(B.id==='daynight'){const day=SIM.time>6.5&&SIM.time<19;SIM.jump=day?21:6.8;}
   else if(B.id==='stop'){SIM.thrA=0;SIM.thrB=0;SIM.sw=0;}
   else if(B.id==='depart')FL.request=true;
-  else if(B.id==='view')setView(1-SIM.view);
+  else if(B.id==='view')setView(0);
+  else if(B.id==='kickoff'){SIM.match=true;newMatch();}
+  else if(B.id==='howay'){SND.roar(1);MATCH.cheer[0]=4;}
 }
 function updatePanel(dt){
   for(const C of CTRL){
@@ -1154,8 +1156,9 @@ function updatePanel(dt){
 /* ================= camera & pointer ================= */
 const EYE=new THREE.Vector3(0,75,188),AIM=new THREE.Vector3(0,-12,30);
 const VIEW={yaw:0,pitch:0,fov:55};
-// camera presets: 0 = main layout, 1 = airport extension
-const VIEWS=[{e:new THREE.Vector3(0,75,188),a:new THREE.Vector3(0,-12,30)},{e:new THREE.Vector3(212,72,196),a:new THREE.Vector3(252,-6,5)}];
+// camera presets: 0 = main layout, 1 = airport extension, 2 = stadium extension
+const VIEWS=[{e:new THREE.Vector3(0,75,188),a:new THREE.Vector3(0,-12,30)},{e:new THREE.Vector3(212,72,196),a:new THREE.Vector3(252,-6,5)},
+  {e:new THREE.Vector3(-222,86,162),a:new THREE.Vector3(-250,-17,6)}];
 const base0=new THREE.Vector3();
 function setView(i){SIM.view=i;VIEW.yaw=0;VIEW.pitch=0;}
 function updateCamera(){
@@ -1192,7 +1195,7 @@ cvs.addEventListener('pointermove',e=>{
 const endDrag=e=>{drag=null;look=null;cvs.style.cursor='default';};
 cvs.addEventListener('pointerup',endDrag);cvs.addEventListener('pointercancel',endDrag);
 cvs.addEventListener('wheel',e=>{e.preventDefault();VIEW.fov=clamp(VIEW.fov+e.deltaY*.02,18,70);},{passive:false});
-addEventListener('keydown',e=>{if(e.key==='r'||e.key==='R'){VIEW.yaw=0;VIEW.pitch=0;VIEW.fov=55;}if(e.key==='v'||e.key==='V')setView(1-SIM.view);});
+addEventListener('keydown',e=>{if(e.key==='r'||e.key==='R'){VIEW.yaw=0;VIEW.pitch=0;VIEW.fov=55;}if(e.key==='v'||e.key==='V')setView((SIM.view+1)%VIEWS.length);});
 
 /* ================= AIRPORT EXTENSION (module bolted to the right end of the table) =================
    extension terrain spans x 186..310, z -100..100; runway along z at x=285 */
@@ -1341,7 +1344,7 @@ const jet=airliner();scene.add(jet);
 const parkedJet=airliner(0xf6f6f4,0xd9483b,0xd9483b);put(parkedJet,226,.08,-18,-Math.PI/2);
 const cessna=lightPlane();put(cessna,226,.08,-60,0);
 const AIR=new THREE.CatmullRomCurve3([
-  [RWX,.12,-5],[RWX,3,-38],[283,17,-80],[255,30,-98],[200,38,-94],[120,44,-80],[-20,46,-62],[-140,46,-42],[-168,46,18],[-122,45,62],[0,44,72],[120,40,74],[200,32,95],[250,24,120],[280,17,125],[286,10,105],[RWX,4,90],[RWX,1,78],[RWX,.12,70]
+  [RWX,.12,-5],[RWX,3,-38],[283,17,-80],[255,30,-98],[200,38,-94],[120,44,-80],[-20,46,-62],[-150,46,-58],[-232,47,-40],[-262,48,6],[-230,47,54],[-130,45,70],[0,44,72],[120,40,74],[200,32,95],[250,24,120],[280,17,125],[286,10,105],[RWX,4,90],[RWX,1,78],[RWX,.12,70]
 ].map(p=>new THREE.Vector3(...p)),false,'centripetal');
 const AIR_LEN=AIR.getLength(),S_HOLD=DEP.len-81;
 const FL={state:'parked',t:6,s:ARR.len,v:0,u:0,bank:0,psi:null,request:false};
@@ -1371,52 +1374,55 @@ function updateFlight(dt){
 }
 SND.jet=()=>{noise(3.5,.16,380);tone([92,138],3,'sawtooth',.018,{attack:.6,release:1.2,filter:600});};
 
-/* ================= airport control box on the extension fascia ================= */
-const apanel=new THREE.Group();apanel.position.set(235,-6,110.2);apanel.rotation.x=30*DEG;apanel.scale.setScalar(.85);scene.add(apanel);
-const APW=60;
-const A_TOG=[{k:'rwy',u:-19,name:'RUNWAY|LIGHTS'},{k:'autoFly',u:-7,name:'AUTO|FLIGHTS'}];
-const A_BTN=[{id:'depart',u:7,col:0xff8c42,name:'DEPART'},{id:'view',u:20,col:0xa06ae0,name:'LAYOUT|VIEW'}];
-{
-  const v=new VB(.02);v.box(0,-3,0,APW+2,3,PD+2,0x1c2530);
-  v.box(0,-.2,-PD/2-.7,APW+2.4,.9,.6,0xc9a24a,0,0);v.box(0,-.2,PD/2+.7,APW+2.4,.9,.6,0xc9a24a,0,0);
-  v.box(-APW/2-.8,-.2,0,.6,.9,PD+2,0xc9a24a,0,0);v.box(APW/2+.8,-.2,0,.6,.9,PD+2,0xc9a24a,0,0);apanel.add(v.build());
-  const a=new VB(.03);a.box(235,-19,109.2,APW*.85+3,6.4,14,0x6b4428);a.box(235,-19,116.4,APW*.85+4,6.6,.6,0x5a381f);scene.add(a.build());
-  const W=600,H=160,cv=document.createElement('canvas');cv.width=W;cv.height=H;const g=cv.getContext('2d');
-  const X=u=>(u+APW/2)*W/APW,Y=z=>(z+PD/2)*H/PD;
-  g.fillStyle='#34465a';g.fillRect(0,0,W,H);g.textAlign='center';g.textBaseline='middle';
-  g.strokeStyle='#c9a24a';g.lineWidth=2;g.beginPath();g.moveTo(X(-27),Y(-6.4));g.lineTo(X(27),Y(-6.4));g.stroke();
-  g.font='bold 17px system-ui,sans-serif';const w=g.measureText('✈ AIRPORT').width+24;g.fillStyle='#34465a';g.fillRect(X(0)-w/2,Y(-7.5),w,22);g.fillStyle='#e9c46a';g.fillText('✈ AIRPORT',X(0),Y(-6.4));
+/* ================= control boxes on the extension fascias ================= */
+function controlBox(x,W,title,toggles,buttons){
+  const grp=new THREE.Group();grp.position.set(x,-6,110.2);grp.rotation.x=30*DEG;grp.scale.setScalar(.85);scene.add(grp);
+  const v=new VB(.02);v.box(0,-3,0,W+2,3,PD+2,0x1c2530);
+  v.box(0,-.2,-PD/2-.7,W+2.4,.9,.6,0xc9a24a,0,0);v.box(0,-.2,PD/2+.7,W+2.4,.9,.6,0xc9a24a,0,0);
+  v.box(-W/2-.8,-.2,0,.6,.9,PD+2,0xc9a24a,0,0);v.box(W/2+.8,-.2,0,.6,.9,PD+2,0xc9a24a,0,0);grp.add(v.build());
+  const a=new VB(.03);a.box(x,-19,109.2,W*.85+3,6.4,14,0x6b4428);a.box(x,-19,116.4,W*.85+4,6.6,.6,0x5a381f);scene.add(a.build());
+  const CW=W*10,H=160,cv=document.createElement('canvas');cv.width=CW;cv.height=H;const g=cv.getContext('2d');
+  const X=u=>(u+W/2)*CW/W,Y=z=>(z+PD/2)*H/PD;
+  g.fillStyle='#34465a';g.fillRect(0,0,CW,H);g.textAlign='center';g.textBaseline='middle';
+  g.strokeStyle='#c9a24a';g.lineWidth=2;g.beginPath();g.moveTo(X(-W/2+3),Y(-6.4));g.lineTo(X(W/2-3),Y(-6.4));g.stroke();
+  g.font='bold 17px system-ui,sans-serif';const w=g.measureText(title).width+24;g.fillStyle='#34465a';g.fillRect(X(0)-w/2,Y(-7.5),w,22);g.fillStyle='#e9c46a';g.fillText(title,X(0),Y(-6.4));
   const plate=(u,text)=>{const lines=text.split('|');g.fillStyle='#efe6cf';const pw=96,ph=lines.length>1?38:22;
     g.beginPath();g.roundRect(X(u)-pw/2,Y(5.2)-ph/2,pw,ph,5);g.fill();g.fillStyle='#1b2430';g.font='bold 15px system-ui,sans-serif';
     lines.forEach((l,i)=>g.fillText(l,X(u),Y(5.2)+(i-(lines.length-1)/2)*16));};
-  for(const T of A_TOG){plate(T.u,T.name);g.fillStyle='#9fb3c8';g.font='bold 11px system-ui,sans-serif';g.fillText('ON',X(T.u)+26,Y(CZ-1.6));g.fillText('OFF',X(T.u)+26,Y(CZ+1.6));}
-  for(const B of A_BTN)plate(B.u,B.name);
+  for(const T of toggles){plate(T.u,T.name);g.fillStyle='#9fb3c8';g.font='bold 11px system-ui,sans-serif';g.fillText('ON',X(T.u)+26,Y(CZ-1.6));g.fillText('OFF',X(T.u)+26,Y(CZ+1.6));}
+  for(const B of buttons)plate(B.u,B.name);
   const tex=new THREE.CanvasTexture(cv);tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=8;
-  const face=new THREE.Mesh(new THREE.PlaneGeometry(APW,PD).rotateX(-Math.PI/2),new THREE.MeshStandardMaterial({map:tex,roughness:.6,metalness:.1}));
-  face.position.y=.01;face.receiveShadow=true;apanel.add(face);
+  const face=new THREE.Mesh(new THREE.PlaneGeometry(W,PD).rotateX(-Math.PI/2),new THREE.MeshStandardMaterial({map:tex,roughness:.6,metalness:.1}));
+  face.position.y=.01;face.receiveShadow=true;grp.add(face);
+  for(const T of toggles){
+    const base=new THREE.Group();base.position.set(T.u,0,CZ);grp.add(base);
+    const v=new VB(0,'metal');v.box(0,0,0,2.6,.6,3.4,0x2a2f35);v.box(0,.6,0,1.2,.4,1.2,0xb8bcc0);base.add(v.build());
+    const piv=new THREE.Group();piv.position.y=.9;base.add(piv);
+    const s=new VB(0,'metal');s.box(0,0,0,.5,2.8,.5,0xe0e3e6);s.box(0,2.8,0,.8,.6,.8,0xe0e3e6);piv.add(s.build());
+    const led=new THREE.Mesh(new THREE.BoxGeometry(1,.5,1),new THREE.MeshBasicMaterial({color:ledOff}));led.position.set(0,.25,-3.6);base.add(led);
+    const ring=new VB(0);ring.box(0,0,-3.6,1.6,.3,1.6,0x0a0a0a);base.add(ring.build());
+    T.piv=piv;T.led=led;T.type='toggle';hitBox(piv,2.6,4,2.6,1.6,T);CTRL.push(T);
+  }
+  for(const B of buttons){
+    const base=new THREE.Group();base.position.set(B.u,0,CZ);grp.add(base);
+    const v=new VB(0,'metal');v.box(0,0,0,4,.6,4,0x2a2f35);v.box(0,.6,0,3.4,.3,3.4,0xb8bcc0);base.add(v.build());
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(2.8,1.4,2.8).translate(0,.7,0),new THREE.MeshStandardMaterial({color:B.col,roughness:.35,emissive:B.col,emissiveIntensity:.15}));
+    cap.position.y=.9;cap.castShadow=true;base.add(cap);B.cap=cap;B.type='button';B.t=0;hitBox(cap,3.2,2.2,3.2,.7,B);CTRL.push(B);
+  }
+  const lamp=new THREE.PointLight(0xfff0d8,500,90,2);lamp.position.set(x,30,140);scene.add(lamp);
+  return grp;
 }
-for(const T of A_TOG){
-  const base=new THREE.Group();base.position.set(T.u,0,CZ);apanel.add(base);
-  const v=new VB(0,'metal');v.box(0,0,0,2.6,.6,3.4,0x2a2f35);v.box(0,.6,0,1.2,.4,1.2,0xb8bcc0);base.add(v.build());
-  const piv=new THREE.Group();piv.position.y=.9;base.add(piv);
-  const s=new VB(0,'metal');s.box(0,0,0,.5,2.8,.5,0xe0e3e6);s.box(0,2.8,0,.8,.6,.8,0xe0e3e6);piv.add(s.build());
-  const led=new THREE.Mesh(new THREE.BoxGeometry(1,.5,1),new THREE.MeshBasicMaterial({color:ledOff}));led.position.set(0,.25,-3.6);base.add(led);
-  const ring=new VB(0);ring.box(0,0,-3.6,1.6,.3,1.6,0x0a0a0a);base.add(ring.build());
-  T.piv=piv;T.led=led;T.type='toggle';hitBox(piv,2.6,4,2.6,1.6,T);CTRL.push(T);
-}
-for(const B of A_BTN){
-  const base=new THREE.Group();base.position.set(B.u,0,CZ);apanel.add(base);
-  const v=new VB(0,'metal');v.box(0,0,0,4,.6,4,0x2a2f35);v.box(0,.6,0,3.4,.3,3.4,0xb8bcc0);base.add(v.build());
-  const cap=new THREE.Mesh(new THREE.BoxGeometry(2.8,1.4,2.8).translate(0,.7,0),new THREE.MeshStandardMaterial({color:B.col,roughness:.35,emissive:B.col,emissiveIntensity:.15}));
-  cap.position.y=.9;cap.castShadow=true;base.add(cap);B.cap=cap;B.type='button';B.t=0;hitBox(cap,3.2,2.2,3.2,.7,B);CTRL.push(B);
-}
-const apanelLamp=new THREE.PointLight(0xfff0d8,500,90,2);apanelLamp.position.set(235,30,140);scene.add(apanelLamp);
-// on-screen shortcut to switch between the two viewpoints
+controlBox(235,60,'✈ AIRPORT',[{k:'rwy',u:-19,name:'RUNWAY|LIGHTS'},{k:'autoFly',u:-7,name:'AUTO|FLIGHTS'}],
+  [{id:'depart',u:7,col:0xff8c42,name:'DEPART'},{id:'view',u:20,col:0xa06ae0,name:'LAYOUT|VIEW'}]);
+// on-screen shortcuts to jump between the viewpoints
 {
-  const b=document.createElement('button');b.textContent='✈ Airport view';
-  b.style.cssText='position:fixed;right:14px;top:12px;padding:8px 14px;border:0;border-radius:8px;background:rgba(24,16,10,.6);color:#f6ead4;font:600 13px system-ui,sans-serif;cursor:pointer;backdrop-filter:blur(3px)';
-  b.onclick=()=>{ensureAudio();setView(1-SIM.view);};document.body.appendChild(b);
-  setInterval(()=>{b.textContent=SIM.view?'🚂 Layout view':'✈ Airport view';},250);
+  const bar=document.createElement('div');bar.style.cssText='position:fixed;right:14px;top:12px;display:flex;gap:6px';
+  const btns=['🚂 Layout','✈ Airport','⚽ Stadium'].map((name,i)=>{const b=document.createElement('button');b.textContent=name;
+    b.style.cssText='padding:8px 12px;border:0;border-radius:8px;font:600 13px system-ui,sans-serif;cursor:pointer;backdrop-filter:blur(3px)';
+    b.onclick=()=>{ensureAudio();setView(i);};bar.appendChild(b);return b;});
+  document.body.appendChild(bar);
+  const paint=()=>btns.forEach((b,i)=>{const on=i===SIM.view;b.style.background=on?'rgba(233,196,106,.9)':'rgba(24,16,10,.6)';b.style.color=on?'#1b1208':'#f6ead4';});
+  paint();setInterval(paint,250);
 }
 
 /* ================= per-frame airport update ================= */
@@ -1433,13 +1439,525 @@ function updateAirport(dt,t){
 }
 const BAG={s:0};
 
+/* ================= ST JAMES' PARK EXTENSION (module bolted to the left end of the table) =================
+   Newcastle United's ground on terrain x -310..-186, z -100..100, with the pitch running north-south along z.
+   The towering Milburn (west) and Leazes (north) stands share one L-shaped cantilever roof, the Gallowgate
+   End (south) is mid-height, and the East Stand stays low in front of the listed Leazes Terrace. */
+const SJP={x0:-310,hz:100};
+const PX=-243,PZ=-2,HW=21,HL=32;                  // pitch centre and half extents
+const XW=-267,XE=-219,ZN=-37,ZS=33;               // pitch-side edges of the Milburn, East, Leazes and Gallowgate stands
+MAT.flood=new THREE.MeshBasicMaterial({vertexColors:true});   // floodlights along the roof edges
+{
+  const T=new VB(.03);T.noBottom=false;
+  const WOOD=0xa7703f,FASCIA=0x274a33;
+  T.box(-249.8,-7,0,120.4,4,200,WOOD);
+  T.box(-250.6,-17,100.8,122,14,1.6,FASCIA);T.box(-250.6,-17,-100.8,122,14,1.6,FASCIA);T.box(-310.8,-17,0,1.6,14,203.2,FASCIA);
+  T.box(-250.6,-3.6,100.8,122,1,1.8,0xd8b266);
+  for(const x of [-200,-304])for(const z of [-93,93])T.box(x,-90,z,7,73,7,0x7a4b28);
+  T.box(-252,-70,93,100,4,3,0x7a4b28);T.box(-252,-70,-93,100,4,3,0x7a4b28);
+  T.box(-189,-22,0,6,3,180,0x5a381f);                             // joining bracket under the seam
+  put(T.build());
+}
+for(let x=-188;x>SJP.x0;x-=4)for(let z=-SJP.hz+2;z<SJP.hz;z+=4){
+  let col=pick(ZC.grass);const n=noise2(x,z);_c.set(col).offsetHSL(n*.02,0,n*.05);col=_c.clone();
+  S.box(x,-3,z,4,3,4,col,0,.03);
+}
+/* surfaces: paving .08, road .12, pitch surround .1, pitch .14, lines .16: distinct heights so nothing z-fights */
+const PAVE=[0xb9b5ac,0xb1ada4,0xbfbbb2];
+for(let x=-188;x>SJP.x0;x-=4)for(let z=98;z>-72;z-=4)S.box(x,0,z,4,.08,4,pick(PAVE),0,.02);
+
+/* voxel lettering: 5-row glyphs, read left to right */
+const FONT={A:['.#.','#.#','###','#.#','#.#'],C:['.##','#..','#..','#..','.##'],D:['##.','#.#','#.#','#.#','##.'],
+  E:['###','#..','##.','#..','###'],F:['###','#..','##.','#..','#..'],I:['#','#','#','#','#'],J:['..#','..#','..#','#.#','.#.'],
+  K:['#.#','#.#','##.','#.#','#.#'],L:['#..','#..','#..','#..','###'],M:['#...#','##.##','#.#.#','#...#','#...#'],
+  N:['#...#','##..#','#.#.#','#..##','#...#'],P:['##.','#.#','##.','#..','#..'],R:['##.','#.#','##.','#.#','#.#'],
+  S:['.##','#..','.#.','..#','##.'],T:['###','.#.','.#.','.#.','.#.'],U:['#.#','#.#','#.#','#.#','###'],
+  W:['#...#','#...#','#.#.#','##.##','#...#'],"'":['#','#','.','.','.'],' ':['..','..','..','..','..']};
+function textBits(str){
+  const cols=[];for(const ch of str){const gl=FONT[ch];if(cols.length)cols.push(0);
+    for(let c=0;c<gl[0].length;c++){let m=0;for(let r=0;r<5;r++)if(gl[r][c]==='#')m|=1<<r;cols.push(m);}}
+  return {w:cols.length,on:(c,r)=>c>=0&&c<cols.length&&r>=0&&r<5&&!!(cols[c]>>r&1)};
+}
+/* glowing letters on a wall; (ux,uz) is the reading direction, centred on (cx,cz), top edge at ytop */
+function voxText(str,cx,ytop,cz,px,col,ux=1,uz=0,kind='always'){
+  const t=textBits(str);
+  for(let c=0;c<t.w;c++)for(let r=0;r<5;r++)if(t.on(c,r)){const o=(c-t.w/2+.5)*px;
+    S.glow(cx+ux*o,ytop-(r+1)*px,cz+uz*o,ux?px*.92:.12,px*.92,ux?.12:px*.92,col,kind);}
+}
+
+/* ---------- pitch ---------- */
+S.box(PX,0,PZ,XE-XW,.1,ZS-ZN,0x3f7d35,0,.02);
+for(let i=0;i<16;i++)S.box(PX,.1,PZ-HL+2+i*4,2*HW,.04,4,i%2?0x4c9638:0x5aa844,0,.012);   // mowing stripes
+{
+  const LN=0xf4f4ee,ly=.14,lw=.25;
+  const lx=(x0,x1,z)=>S.box((x0+x1)/2,ly,z,Math.abs(x1-x0)+lw,.02,lw,LN,0,0);
+  const lz=(x,z0,z1)=>S.box(x,ly,(z0+z1)/2,lw,.02,Math.abs(z1-z0),LN,0,0);
+  const arc=(cx,cz,r,keep)=>{for(let a=0;a<360;a+=6){const x=cx+Math.cos(a*DEG)*r,z=cz+Math.sin(a*DEG)*r;if(keep(x,z))S.box(x,ly,z,r*.11+.05,.02,lw,LN,-a*DEG-Math.PI/2,0);}};
+  lx(PX-HW,PX+HW,PZ-HL);lx(PX-HW,PX+HW,PZ+HL);lz(PX-HW,PZ-HL,PZ+HL);lz(PX+HW,PZ-HL,PZ+HL);lx(PX-HW,PX+HW,PZ);
+  arc(PX,PZ,5.5,()=>true);S.box(PX,ly,PZ,.5,.02,.5,LN,0,0);
+  for(const s of [-1,1]){
+    const gz=PZ+s*HL,bz=gz-s*10,sz=gz-s*3.4,spot=gz-s*6.8;
+    lz(PX-12.5,gz,bz);lz(PX+12.5,gz,bz);lx(PX-12.5,PX+12.5,bz);           // penalty area
+    lz(PX-5.5,gz,sz);lz(PX+5.5,gz,sz);lx(PX-5.5,PX+5.5,sz);               // six-yard box
+    S.box(PX,ly,spot,.45,.02,.45,LN,0,0);arc(PX,spot,5.6,(x,z)=>s*(bz-z)>.2);
+  }
+}
+/* goals: posts & bar in metal, nets as a lattice of thin voxels */
+for(const s of [-1,1]){
+  const gz=PZ+s*HL,W=3,H=2.6,D=1.6,NET=0xe6e6e0,y0=.14;
+  for(const sx of [-1,1])SM.box(PX+sx*W,y0,gz,.26,H,.26,0xffffff,0,0);
+  SM.box(PX,y0+H,gz,2*W+.26,.26,.26,0xffffff,0,0);
+  for(const sx of [-1,1])SM.box(PX+sx*W,y0,gz+s*D,.12,H-.3,.12,0xcfcfcf,0,0);
+  SM.box(PX,y0+H-.3,gz+s*D,2*W,.1,.1,0xcfcfcf,0,0);
+  for(let x=-W+.5;x<W-.1;x+=.5){S.box(PX+x,y0,gz+s*D,.05,H-.3,.05,NET,0,0);S.box(PX+x,y0+H-.2,gz+s*D/2,.05,.05,D,NET,0,0);}
+  for(let y=.5;y<H-.3;y+=.5){S.box(PX,y0+y,gz+s*D,2*W,.05,.05,NET,0,0);for(const sx of [-1,1])S.box(PX+sx*W,y0+y,gz+s*D/2,.05,.05,D,NET,0,0);}
+  for(const sx of [-1,1])for(let d=.5;d<D;d+=.5)S.box(PX+sx*W,y0,gz+s*d,.05,H-.25,.05,NET,0,0);
+}
+// corner flags in black and white
+for(const sx of [-1,1])for(const s of [-1,1]){const x=PX+sx*HW,z=PZ+s*HL;
+  S.box(x,.14,z,.12,2.3,.12,0xf4f4f4,0,0);S.box(x,1.95,z+s*.2,.05,.45,.3,0x151515,0,0);S.box(x,1.95,z+s*.5,.05,.45,.3,0xf4f4f4,0,0);}
+/* LED advertising boards around the pitch; (nx,nz) points at the pitch */
+{
+  const ADC=[0x2a6fe0,0xf2f2f2,0xe8412c,0x1fa84f,0xf5c518,0x19b3c9];let n=0;
+  const run=(x0,z0,x1,z1,nx,nz)=>{const L=Math.hypot(x1-x0,z1-z0),ux=(x1-x0)/L,uz=(z1-z0)/L,k=Math.max(1,Math.round(L/6)),seg=L/k,ry=-Math.atan2(uz,ux);
+    for(let i=0;i<k;i++){const cx=x0+ux*seg*(i+.5),cz=z0+uz*seg*(i+.5);
+      S.box(cx,.1,cz,seg-.1,.95,.35,0x2a2d33,ry,0);S.glow(cx+nx*.2,.26,cz+nz*.2,seg-.3,.64,.06,ADC[n++%ADC.length],'always',ry);}};
+  const bx=HW+1.8,bz=HL+1.9;
+  run(PX-bx,PZ-HL-1,PX-bx,PZ-9,1,0);run(PX-bx,PZ+9,PX-bx,PZ+HL+1,1,0);    // west side leaves room for the dugouts
+  run(PX+bx,PZ-HL-1,PX+bx,PZ+HL+1,-1,0);
+  run(PX-HW-1.6,PZ-bz,PX+HW+1.6,PZ-bz,0,1);run(PX-HW-1.6,PZ+bz,PX+HW+1.6,PZ+bz,0,-1);
+  // dugouts and the players' tunnel in front of the Milburn Stand
+  for(const dz of [-5.2,5.1]){const z=PZ+dz;
+    S.box(-266.75,.1,z,.3,2.1,6,0x1c1c1f);S.box(-266,2.2,z,1.9,.12,6.2,0x9ec7dc);
+    for(const e of [-1,1])S.box(-266,.1,z+e*3,1.6,2.1,.08,0x9ec7dc);
+    for(let i=-2.25;i<2.3;i+=.9)S.box(-266.3,.1,z+i,.6,.75,.7,Math.round(i/.9)%2?0x151515:0xf2f2f2);}
+  S.box(-266.1,.1,PZ,1.8,2.6,2.6,0x151515);S.box(-265.18,.1,PZ,.05,2.6,2.6,0xf2f2f2,0,0);S.box(-265.15,.1,PZ,.08,2.2,1.8,0x0b0b0d,0,0);
+}
+
+/* ---------- stands ----------
+   Each profile is a list of rows (1 deep), outward from the pitch: tread height, whether it seats fans,
+   glazed hospitality boxes and the back wall. Corners are square: row k of both sides meets at depth k. */
+const BIG=[],MED=[],LOW=[];
+for(let k=0;k<12;k++)BIG.push({h:1.2+k*.5,seat:1});
+BIG.push({h:7},{h:10.6,box:1});
+for(let k=0;k<17;k++)BIG.push({h:11+k*.8,seat:1,up:1});
+BIG.push({h:30.5,back:1});
+for(let k=0;k<18;k++)MED.push({h:1.2+k*.62,seat:1});MED.push({h:17,back:1});
+for(let k=0;k<10;k++)LOW.push({h:1+k*.5,seat:1});LOW.push({h:9,back:1});
+const CONCRETE=[0x9c9992,0xa3a099,0x96938c],SEAT_BLK=0x1c1c1f,SEAT_WHT=0xf2f2ef;
+const SKIN=[0xf1c7a1,0xc68a5e,0x8d5a3b,0xf7d7b8,0xe0b08a],HAIR=[0x2a1d14,0x5a3a22,0x111111,0xc9a063,0x7a4a2a];
+const FAN_H=[0xf4f4f4,0x1b1b1b,0xf4f4f4,0x1b1b1b,0x2b2f3a,0x44474d,0x1b1b1b,0xf4f4f4,0x5a6b7a];
+const FAN_A=[0xd4202a,0xd4202a,0xf4f4f4,0x1b1b1b];
+const crowdVB=[0,1,2,3].map(()=>{const v=new VB(.07);v.noBottom=true;return v;}),awayVB=new VB(.07);awayVB.noBottom=true;
+const sideOf=side=>({alongZ:side==='W'||side==='E',sg:side==='W'||side==='N'?-1:1,base:{W:XW,E:XE,N:ZN,S:ZS}[side]});
+/* rows k0..k1 of a stand; span(k) gives the row's extent along the stand */
+function standRows(side,prof,k0,k1,span,o={}){
+  const {alongZ,sg,base}=sideOf(side),g0=(alongZ?PZ:PX)+.45,XZ=(d,a)=>alongZ?[d,a]:[a,d];
+  for(let k=k0;k<=k1;k++){
+    const r=prof[k],[a0,a1]=span(k),len=a1-a0;if(len<.05)continue;
+    const [bx,bz]=XZ(base+sg*(k+.5),(a0+a1)/2);
+    S.box(bx,0,bz,alongZ?1:len,r.h,alongZ?len:1,r.back?(o.backCol??0x8e949b):r.box?0x3b424b:pick(CONCRETE),0,.02);
+    if(r.box)for(let a=a0+1.4;a<a1-1.2;a+=2.4){const [gx,gz]=XZ(base+sg*(k-.05),a);
+      S.glow(gx,prof[k-1].h+.45,gz,alongZ?.1:2,2.5,alongZ?2:.1,pick([0xffe7b0,0xd6ecff,0xfff0cc]),'win');}
+    if(!r.seat)continue;
+    // seats sit on one grid along the stand so lettering lines up from row to row
+    for(let j=Math.ceil((a0+.45-g0)/.9-1e-6);g0+j*.9<=a1-.45+1e-6;j++){
+      const a=g0+j*.9;
+      if(!r.up&&o.aisle!==false&&((j%14)+14)%14===13)continue;
+      const lit=o.seat?o.seat(k,a,j):false,[sx,sz]=XZ(base+sg*(k+.66),a);
+      S.box(sx,r.h,sz,alongZ?.5:.72,.55,alongZ?.72:.5,lit?SEAT_WHT:SEAT_BLK,0,.03);
+      if((lit&&!o.cover)||R()>(o.fill??.74))continue;
+      const away=o.away&&o.away(k,a),vb=away?awayVB:crowdVB[o.crowd],[fx,fz]=XZ(base+sg*(k+.6),a);
+      vb.box(fx,r.h+.2,fz,.52,.78,.52,pick(away?FAN_A:FAN_H));vb.box(fx,r.h+.98,fz,.34,.34,.34,pick(SKIN),0,.02);
+    }
+  }
+}
+/* windows on the exposed end of a stand; the end face lies at `at` along the stand, facing direction dir */
+function standEnd(side,prof,k0,k1,at,dir){
+  const {alongZ,sg,base}=sideOf(side);
+  for(let k=k0;k<=k1;k++){const d=base+sg*(k+.5);
+    for(let y=1.6;y<prof[k].h-1.4;y+=3.1){const [x,z]=alongZ?[d,at+dir*.04]:[at+dir*.04,d];
+      S.glow(x,y,z,alongZ?.62:.1,1.5,alongZ?.1:.62,pick(WINC),'win');}}
+}
+const TXT_W=textBits('NEWCASTLE'),TXT_N=textBits('UNITED');
+const letterRow=k=>Math.floor((27-k)/2);      // rows 18..27 of the big stands carry the lettering, 2 rows per pixel
+// Milburn Stand (west): reads towards the Leazes end; the words carry on round the corner onto the Leazes Stand
+standRows('W',BIG,0,31,k=>[ZN-k-1,ZS],{crowd:0,seat:(k,a)=>BIG[k].up&&TXT_W.on(Math.floor((PZ-2+TXT_W.w*.9-a)/1.8),letterRow(k))});
+standEnd('W',BIG,19,31,ZS,1);
+// Leazes Stand (north), with the away fans high up in the north-east corner
+standRows('N',BIG,0,31,k=>[XW-k,XE],{crowd:1,seat:(k,a)=>BIG[k].up&&TXT_N.on(Math.floor((a-PX+2+TXT_N.w*.9)/1.8),letterRow(k)),
+  away:(k,a)=>k>=24&&a>XE-16});
+standEnd('N',BIG,11,31,XE,1);
+// Gallowgate End (south) in black and white stripes, wrapping round the south-west corner
+const stripes=(k,a,j)=>Math.floor(j/2)%2===0;
+standRows('S',MED,0,18,k=>[XW-k-1,XE],{crowd:2,seat:stripes,cover:true,fill:.8});
+standRows('W',MED,1,18,k=>[ZS,ZS+k],{crowd:2,seat:stripes,cover:true,fill:.8});
+standEnd('S',MED,0,18,XE,1);
+// East Stand (low), wrapping into the north-east corner under the end of the Leazes Stand
+standRows('E',LOW,0,10,k=>[ZN-k-1,ZS],{crowd:3,backCol:0x9a5a44});
+standRows('N',LOW,1,10,k=>[XE,XE+k],{crowd:3,backCol:0x9a5a44});
+standEnd('E',LOW,0,10,ZS,1);
+const crowdG=crowdVB.map(v=>put(v.build())),awayG=put(awayVB.build());
+for(const g of [...crowdG,awayG])g.traverse(m=>{if(m.isMesh)m.castShadow=false;});
+
+/* outside walls: glazing on the backs of the stands */
+for(let z=ZN-31;z<ZS-1;z+=2.4)for(let y=2;y<28;y+=3.6)S.glow(XW-32-.05,y,z+1.2,.1,2.2,1.8,pick(WINC),'win');      // Milburn
+for(let x=XW-30;x<XE-1;x+=2.4)for(let y=2;y<28;y+=3.6)S.glow(x+1.2,y,ZN-32-.05,1.8,2.2,.1,pick(WINC),'win');      // Leazes
+for(let z=ZN-10;z<ZS-1;z+=2.6)for(const y of [1.6,5])S.glow(XE+11.05,y,z+1.3,.1,1.8,1.4,pick(WINC),'win');        // East (brick)
+{ // Gallowgate facade: white fins, glass bands, turnstiles and the name in lights
+  const zf=ZS+19;
+  for(let x0=XW-19;x0<XE-.5;x0+=6.4){S.box(x0,0,zf+.2,.5,17,.4,0xf2f2f0);
+    for(const dx of [1.6,4.8]){const x=x0+dx;if(x>XE-1.4)continue;
+      S.box(x,0,zf+.05,2.4,2.6,.1,0x22262c,0,0);S.glow(x,2.7,zf+.05,2.2,.35,.1,0x40ff70,'always');
+      for(let y=4.4;y<15.5;y+=3.3)if(!(y>8.5&&y<14.8&&Math.abs(x+252.5)<20)){
+        if(R()<.45)S.glow(x,y,zf+.05,2.6,2.4,.1,pick([0xd6ecff,0xffe7b0]),'win');else S.box(x,y,zf+.05,2.6,2.4,.1,0x34414e,0,0);}}}
+  S.box(-252.5,9.6,zf+.55,39,5,.3,0x151515);voxText("ST JAMES' PARK",-252.5,14,zf+.76,.7,0xffffff);
+  // black and white flags along the pavement
+  for(let x=-282;x<=-222;x+=10){S.box(x,.08,zf+3.2,.25,7.5,.25,0xdadada);for(let i=0;i<4;i++)S.box(x+.45+i*.55,5.8,zf+3.2,.55,1.6,.06,i%2?0x151515:0xf4f4f4,0,0);}
+}
+
+/* ---------- roofs ---------- */
+const ROOF=[0xd3d7da,0xc7ccd0],ROOF_LT=[0xe6eff4,0xdce7ed],RY=30.5,WHT=0xf2f2f0;
+// the big L over the Milburn and Leazes stands: steel sheet, translucent front strip, ribs and a back truss
+for(let z=ZN-32,i=0;z<ZS+2;z+=4,i++){S.box(-286,RY,z+2,26,.8,4,ROOF[i%2],0,.01);S.box(-269,RY,z+2,8,.8,4,ROOF_LT[i%2],0,.01);if(i)S.box(-282,RY+.8,z,34,.45,.35,WHT,0,0);}
+for(let x=XW+2,i=0;x<XE-.1;x+=4.6,i++){S.box(x+2.3,RY,-56,4.6,.8,26,ROOF[i%2],0,.01);S.box(x+2.3,RY,-39,4.6,.8,8,ROOF_LT[i%2],0,.01);S.box(x,RY+.8,-52,.35,.45,34,WHT,0,0);}
+S.box(-298,RY+3.4,-17,1.2,.6,104,WHT,0,0);S.box(-258.5,RY+3.4,-68,79,.6,1.2,WHT,0,0);
+for(let z=ZN-32;z<=ZS+2;z+=4)S.box(-298,RY+.8,z,.5,2.6,.5,WHT,0,0);
+for(let x=-294;x<XE;x+=4)S.box(x,RY+.8,-68,.5,2.6,.5,WHT,0,0);
+// sloping cantilever ties from the back truss down towards the front of the roof
+for(let z=ZN-26;z<ZS;z+=13)for(let i=0;i<20;i++)S.box(-297.5+i,RY+3.3-i*.13,z,1.05,.4,.4,WHT,0,0);
+for(let x=XW+6;x<XE;x+=13)for(let i=0;i<20;i++)S.box(x,RY+3.3-i*.13,-67.5+i,.4,.4,1.05,WHT,0,0);
+// front fascia with the floodlights
+S.box(-264.9,RY-.6,-.1,.6,1.9,70.2,WHT,0,0);S.box(-241.8,RY-.6,-34.9,45.6,1.9,.6,WHT,0,0);
+for(let z=-34;z<34.5;z+=2.2)S.glow(-264.55,RY-.5,z,.1,.6,1.5,0xfffbe8,'flood');
+for(let x=-263.5;x<-219.5;x+=2.2)S.glow(x,RY-.5,-34.55,1.5,.6,.1,0xfffbe8,'flood');
+// Gallowgate roof
+for(let x=XW-19,i=0;x<XE-.1;x+=4.1875,i++){S.box(x+2.09,17,44.5,4.1875,.7,15,ROOF[i%2],0,.01);S.box(x+2.09,17,34.5,4.1875,.7,5,ROOF_LT[i%2],0,.01);if(i)S.box(x,17.7,42,.3,.4,20,WHT,0,0);}
+S.box(-252.5,16.3,31.9,67,1.6,.6,WHT,0,0);for(let x=-285;x<-219.5;x+=2.2)S.glow(x,16.4,31.55,1.5,.5,.1,0xfffbe8,'flood');
+// East Stand roof
+for(let z=ZN-11,i=0;z<ZS-.1;z+=4.05,i++)S.box(-213.75,9,z+2.025,11.5,.5,4.05,ROOF[i%2],0,.01);
+S.box(-219.6,8.5,-7.5,.5,1.2,81,WHT,0,0);for(let z=-47;z<32.5;z+=2.4)S.glow(-219.9,8.6,z,.1,.4,1.3,0xfffbe8,'flood');
+
+/* big screen in the north-east corner, standing on the East Stand roof and angled at the pitch */
+const scrCv=document.createElement('canvas');scrCv.width=512;scrCv.height=208;
+const scrTex=new THREE.CanvasTexture(scrCv);scrTex.colorSpace=THREE.SRGBColorSpace;
+{
+  const cx=-213.5,cz=-43.5,ry=-Math.PI/4;
+  S.box(cx+.21,13.2,cz-.21,12.8,5.8,.5,0x151515,ry,0);
+  for(const s of [-1,1])S.box(cx+s*3.6,9.5,cz+s*3.6,.5,3.8,.5,0x3a3a3a,ry,0);
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(12,4.9),new THREE.MeshBasicMaterial({map:scrTex,color:new THREE.Color(1.35,1.35,1.35)}));
+  m.position.set(cx,16.1,cz);m.rotation.y=ry;scene.add(m);
+}
+
+/* ---------- around the ground ---------- */
+// road loop round the stadium: Strawberry Place, Barrack Road, Leazes Terrace
+drawRoad(roundRect(51.25,68.5,6,-254.25,-8.5),6);
+addVehicles(roundRect(52.75,70,7.5,-254.25,-8.5),['car','bus','car','car','truck'],1,13);
+addVehicles(roundRect(49.75,67,4.5,-254.25,-8.5),['car','car','bus','car'],-1,12);
+// Leazes Terrace: the listed sandstone terrace behind the East Stand
+for(let z=-70;z+14<=54;z+=15.5)house(-194,z+7,14,8,10.8,{ry:-Math.PI/2,wall:0xcdb78e,roof:0x4f555e});
+// Sir Bobby Robson memorial garden in the corner behind the Milburn and Gallowgate stands
+function statue(x,z,ry,armUp){
+  S.at(x,0,z,ry);S.box(0,.08,0,3,1.9,3,0x5d5f63);S.box(0,1.98,0,2.6,.3,2.6,0x7a7c80);
+  const B=0x8a6a3a,y=2.28;
+  for(const s of [-1,1])SM.box(s*.3,y,0,.45,1.7,.5,B);
+  SM.box(0,y+1.7,0,1.15,1.5,.65,B);SM.box(0,y+3.2,0,.62,.62,.6,B);
+  SM.box(-.72,y+1.9,0,.3,1.25,.34,B);
+  if(armUp)SM.box(.72,y+2.9,0,.3,1.6,.34,B);else SM.box(.72,y+1.9,.15,.3,1.25,.34,B);
+  S.at();
+}
+{
+  const x0=XW-31.5,x1=XW-20;
+  for(let x=x0;x<=x1;x+=1)for(const z of [37,50.5])if(!(z>50&&Math.abs(x-(x0+x1)/2)<2))S.box(x,.08,z,1,.8,.8,0x2f6b35,0,.08);
+  for(let z=37.5;z<50.5;z+=1)for(const x of [x0,x1])S.box(x,.08,z,.8,.8,1,0x2f6b35,0,.08);
+  const mid=(x0+x1)/2;
+  for(let i=0;i<60;i++){const x=rnd(x0+1.2,x1-1.2),z=rnd(38.3,49.5);
+    if(Math.abs(x-mid)<2.4&&Math.abs(z-43.5)<2.4||Math.abs(x-mid)<1.1||x<mid-2&&z>46.6)continue;
+    S.box(x,.08,z,.6,.5,.6,pick([0xe94b6a,0xf2e14b,0xffffff,0xb46ae0,0x3f8f3f,0x4fa34a]),0,.1);}
+  statue(mid,43.5,0,false);bench(mid-3.5,48,.08,Math.PI);
+}
+// Alan Shearer on Strawberry Place, arm raised
+statue(-238,76,0,true);
+// St James' Metro entrance with its black and yellow M
+{
+  S.at(-213,0,80,0);
+  S.box(0,.08,0,9,.3,7,0x6b6f75);S.box(0,.38,-.6,6.6,.02,4.4,0x151515,0,0);
+  for(let i=0;i<5;i++)S.box(0,.38,-2.4+i*.9,6.4,.03,.12,0x6b6f75,0,0);
+  for(const [x,z] of [[-4.2,-3.2],[4.2,-3.2],[-4.2,3.2],[4.2,3.2]])S.box(x,.38,z,.3,3.4,.3,0x2a2d33);
+  S.box(0,3.78,0,9.2,.45,7.2,0x2a2d33);S.glow(0,3.3,3.25,7.8,.4,.1,0xfff0d0,'street');
+  for(const x of [-4.2,4.2])S.glow(x,.6,0,.1,2.6,5.8,0xd6ecff,'win');S.glow(0,.6,-3.25,7.8,2.6,.1,0xd6ecff,'win');
+  S.at();
+  S.box(-205.5,.08,85.5,.35,6,.35,0x2a2d33);S.box(-205.5,6,85.5,2,2,2,0x151515);
+  voxText('M',-205.5,7.55,86.52,.27,0xffd21a);voxText('M',-204.48,7.55,85.5,.27,0xffd21a,0,-1);
+}
+// pub, burger van and trees on the plaza
+house(-290,84,13,9,7.5,{wall:0x7b2a2a,roof:0x3f3f44,shop:true,awning:0x151515});
+{
+  S.at(-262,.08,74,0);
+  for(const sx of [-1,1])for(const sz of [-1,1])S.box(sx*1.8,0,sz*1.1,.9,.9,.3,0x181818,0,0);
+  S.box(0,.5,0,6,2.8,2.4,0xf4f4f4);for(let i=0;i<6;i++)S.box(-2.5+i,.5,1.21,1,.9,.05,i%2?0x151515:0xf4f4f4,0,0);
+  S.glow(.4,1.6,1.22,3.6,1.1,.06,0xfff0d0,'win');S.box(.4,2.8,1.7,4.2,.15,1,0xd9483b);
+  S.at();
+}
+for(let x=-300;x<-190;x+=rnd(11,15))if(Math.abs(x+238)>5&&Math.abs(x+209)>8)tree(x,96.2,rnd(.5,.62),'round');
+for(let x=-298;x<-196;x+=16)if(Math.abs(x+238)>4)lamp(x,65.6,Math.PI/2,7,false);
+// fans on the way in
+{
+  const busy=[[-300,77,-280,91],[-244,72,-232,80],[-219,75,-202,90],[-266,70,-258,78],[-310,93,-186,100]];
+  const placed=[],ok=(x,z)=>!busy.some(b=>x>b[0]&&x<b[2]&&z>b[1]&&z<b[3])&&!placed.some(q=>Math.hypot(q[0]-x,q[1]-z)<1.3);
+  for(let i=0;i<500&&placed.length<70;i++){
+    const pave=R()<.3,x=pave?rnd(-298,-208):rnd(-300,-192),z=pave?rnd(53.8,54.5):rnd(67.5,92);   // Gallowgate pavement or the plaza
+    if(!ok(x,z))continue;placed.push([x,z]);person(x,z,.08,rnd(0,TAU),pick([0xf4f4f4,0x1b1b1b,0x1b1b1b,0xf4f4f4,0x2b2f3a]));}
+}
+// Leazes Park behind the Leazes Stand: lake, trees and a bandstand
+{
+  S.box(-252,0,-90,54,.12,12,0x9a958c);S.box(-252,0,-90,52,.16,10,0x3a86b8,0,.02);
+  for(let x=-304;x<-192;x+=rnd(7,11)){if(x>-212&&x<-198)continue;
+    if(x>-280&&x<-224)tree(x,-98.3,.5,R()<.5?'pine':'round');else tree(x,rnd(-97,-86),rnd(.55,.7));}
+  S.disc(-205,.08,-90,3.6,.6,0xd8d2c4);for(let a=0;a<360;a+=60)S.box(-205+Math.cos(a*DEG)*3,.68,-90+Math.sin(a*DEG)*3,.3,3,.3,0x2f5d3a);
+  S.disc(-205,3.68,-90,4,.4,0x2f5d3a);S.disc(-205,4.08,-90,2.6,.5,0x2f5d3a);S.box(-205,4.58,-90,.6,.8,.6,0xd9a53a);
+}
+
+/* ---------- the match: Newcastle v Sunderland ---------- */
+const TEAM=[{shirt:[0xf4f4f4,0x151515],shorts:0x151515,socks:0x151515,gk:0x2fae4f,dir:1,tackle:.42,aim:3.4},
+            {shirt:[0xd4202a,0xf4f4f4],shorts:0x151515,socks:0xd4202a,gk:0xf2d33a,dir:-1,tackle:.34,aim:4.2}];
+const FORM=[[0,-.94],[-.72,-.58],[-.26,-.64],[.26,-.64],[.72,-.58],[-.72,-.12],[-.26,-.18],[.26,-.18],[.72,-.12],[-.22,.32],[.22,.36]];
+function footballer(shirt,shorts,socks,striped){
+  const g=new THREE.Group(),b=new VB(.02);
+  b.box(0,.78,0,.74,.34,.44,shorts);
+  if(striped)for(const i of [-1,0,1])b.box(i*.25,1.12,0,.25,.66,.46,shirt[i?0:1]);else b.box(0,1.12,0,.75,.66,.46,shirt[0]);
+  for(const s of [-1,1])b.box(s*.5,1.18,0,.24,.58,.3,shirt[0]);
+  b.box(0,1.78,0,.44,.42,.44,pick(SKIN));b.box(0,2.2,-.02,.46,.12,.48,pick(HAIR));
+  g.add(b.build());
+  const legs=[];
+  for(const s of [-1,1]){const p=new THREE.Group();p.position.set(s*.19,1.02,0);const l=new VB(.02);
+    l.box(0,-.57,0,.28,.33,.32,pick(SKIN));l.box(0,-.92,0,.28,.35,.32,socks);l.box(0,-1.02,.05,.3,.12,.42,0x111111);
+    p.add(l.build());g.add(p);legs.push(p);}
+  g.traverse(m=>{if(m.isMesh)m.castShadow=true;});
+  return {g,legs,x:PX,z:PZ,vx:0,vz:0,face:0,ph:rnd(0,TAU)};
+}
+const players=[];
+for(let tm=0;tm<2;tm++)for(let i=0;i<11;i++){const T_=TEAM[tm],p=i?footballer(T_.shirt,T_.shorts,T_.socks,true):footballer([T_.gk],T_.gk,T_.gk,false);
+  Object.assign(p,{team:tm,idx:i,keeper:!i,cool:0,hold:0,drift:rnd(-1,1)});scene.add(p.g);players.push(p);}
+const ref=footballer([0xf2d33a],0x151515,0x151515,false);scene.add(ref.g);
+const ENTS=[...players,ref];
+const OBST=[[PX-3,PZ-HL],[PX+3,PZ-HL],[PX-3,PZ+HL],[PX+3,PZ+HL],[PX-HW,PZ-HL],[PX+HW,PZ-HL],[PX-HW,PZ+HL],[PX+HW,PZ+HL]];   // posts & corner flags
+const ballMesh=new THREE.Mesh(new THREE.BoxGeometry(.5,.5,.5),new THREE.MeshStandardMaterial({color:0xf8f8f8,roughness:.5}));ballMesh.castShadow=true;scene.add(ballMesh);
+const BALL={x:PX,y:0,z:PZ,vx:0,vy:0,vz:0};
+const MATCH={state:'pre',t:3,clock:0,half:1,score:[0,0],kick:0,first:0,poss:null,last:0,lastP:null,target:null,restart:null,
+  shot:false,shotAge:0,scorerTeam:0,scorer:null,cheer:[0,0],msg:'',msgT:0};
+const note=(m,t=2.5)=>{MATCH.msg=m;MATCH.msgT=t;};
+SND.roar=(v=1)=>{noise(3.4,.22*v,650);noise(2.8,.14*v,1400);noise(3.8,.1*v,380);};
+SND.ref=(n=1)=>{for(let i=0;i<n;i++)setTimeout(()=>tone([2950],i===n-1?.55:.22,'sine',.045,{attack:.01,release:.08,vib:32,filter:6000}),i*380);};
+function kickoff(team){const M=MATCH;M.state='pre';M.t=3;M.kick=team;M.poss=M.target=M.restart=null;M.shot=false;Object.assign(BALL,{x:PX,y:0,z:PZ,vx:0,vy:0,vz:0});}
+function newMatch(){const M=MATCH;M.score=[0,0];M.clock=0;M.half=1;M.first=R()<.5?0:1;kickoff(M.first);}
+function inBox(team,x,z){const d=TEAM[team].dir,gz=PZ-d*HL;return Math.abs(x-PX)<12.5&&(z-gz)*d>-.5&&(z-gz)*d<10;}
+function homeSpot(p,kick){
+  const d=TEAM[p.team].dir;let [fx,fy]=FORM[p.idx];
+  if(kick){fy=p.idx?Math.min(fy*.9,-.2):fy;}
+  else if(!p.keeper){const bp=clamp((BALL.z-PZ)/HL*d,-1,1),att=MATCH.poss?(MATCH.poss.team===p.team?.14:-.1):0;
+    fy=clamp(fy+bp*.42+att,-.9,.92);fx=fx*.9+clamp((BALL.x-PX)/HW,-1,1)*.22;}
+  if(kick&&p.team===MATCH.kick&&p.idx===9)return [PX,PZ-d*.75];
+  return [PX+clamp(fx,-1,1)*HW*.88,PZ+d*fy*HL];
+}
+function take(p){
+  const M=MATCH;if(M.shot&&p.keeper&&p.team!==M.last)note('SAVE!');
+  p.restart=M.restart?M.restart.type:null;
+  M.poss=p;M.last=p.team;M.lastP=p;M.target=null;M.shot=false;M.restart=null;
+  p.hold=p.keeper?1.3:p.restart?.5:rnd(.4,1.4);
+}
+function kickBall(p,tx,tz,sp,vy){
+  const M=MATCH,dx=tx-BALL.x,dz=tz-BALL.z,d=Math.hypot(dx,dz)||1;
+  BALL.vx=dx/d*sp;BALL.vz=dz/d*sp;BALL.vy=vy;M.poss=null;M.last=p.team;M.lastP=p;p.cool=.4;
+}
+function passTo(p,q,lob){
+  const tx=q.x+q.vx*.4,tz=q.z+q.vz*.4,D=Math.hypot(tx-BALL.x,tz-BALL.z);
+  if(lob||D>16){const vy=5+D*.12;kickBall(p,tx,tz,D*.85/(2*vy/18),vy);}else kickBall(p,tx,tz,1.1*D+4,0);
+  MATCH.target=q;
+}
+function choosePass(p){
+  const d=TEAM[p.team].dir;let best=null,bs=-1e9;
+  for(const q of players){if(q.team!==p.team||q===p||q.keeper)continue;
+    const dist=Math.hypot(q.x-p.x,q.z-p.z);if(dist<4||dist>28)continue;
+    let open=9;for(const o of players)if(o.team!==p.team)open=Math.min(open,Math.hypot(o.x-q.x,o.z-q.z));
+    const sc=(q.z-p.z)*d*.6+open*1.2-dist*.15+rnd(0,6);if(sc>bs){bs=sc;best=q;}}
+  return best;
+}
+function setRestart(team,type,x,z){
+  const M=MATCH;M.restart={team,type};M.poss=M.target=null;M.shot=false;Object.assign(BALL,{x,z,y:0,vx:0,vy:0,vz:0});
+  if(type==='corner')note('CORNER');
+}
+function checkOut(){
+  const M=MATCH,dx=BALL.x-PX,dz=BALL.z-PZ;
+  if(Math.abs(dz)>HL){
+    const s=Math.sign(dz),att=TEAM[0].dir===s?0:1,ax=Math.abs(dx);
+    if(ax<2.65&&BALL.y<2.35){ // goal!
+      M.score[att]++;M.state='goal';M.t=5;M.scorerTeam=att;M.scorer=M.lastP&&M.lastP.team===att?M.lastP:players[att*11+9];
+      M.poss=M.target=M.restart=null;M.shot=false;M.cheer[att]=5;note(att?'GOAL':'GOAL! HOWAY!',5);SND.roar(att?.45:1);return;}
+    if(ax<3.35&&BALL.y<2.9){BALL.z=PZ+s*(HL-.05);BALL.vz*=-.5;BALL.vx+=rnd(-2,2);note(ax>2.65?'OFF THE POST!':'OFF THE BAR!');SND.thunk();M.shot=false;return;}
+    if(M.last===att)setRestart(1-att,'goal',PX+Math.sign(dx||1)*2.5,PZ+s*(HL-2.5));
+    else setRestart(att,'corner',PX+Math.sign(dx||1)*(HW-.4),PZ+s*(HL-.4));
+    return;
+  }
+  if(Math.abs(dx)>HW)setRestart(1-M.last,'throw',PX+Math.sign(dx)*(HW-.3),clamp(BALL.z,PZ-HL+1,PZ+HL-1));
+}
+function updateBall(dt){
+  const M=MATCH,B=BALL;
+  if(M.poss){const p=M.poss;B.x=p.x+Math.sin(p.face)*.7;B.z=p.z+Math.cos(p.face)*.7;B.y=0;B.vx=p.vx;B.vz=p.vz;B.vy=0;}
+  else if(M.state==='pre')Object.assign(B,{x:PX,y:0,z:PZ,vx:0,vy:0,vz:0});
+  else{
+    B.x+=B.vx*dt;B.z+=B.vz*dt;B.y+=B.vy*dt;B.vy-=18*dt;
+    if(B.y<=0){B.y=0;B.vy=B.vy<-1.5?-B.vy*.45:0;}
+    const f=Math.exp(-(B.y>.05?.15:1.1)*dt);B.vx*=f;B.vz*=f;
+    if(M.state==='play'&&!M.restart)checkOut();
+    const inGoal=M.state==='goal'&&Math.abs(B.z-PZ)>HL-.3;   // the ball settles in the net
+    if(inGoal){B.x=clamp(B.x,PX-2.7,PX+2.7);B.y=Math.min(B.y,2.1);if(Math.abs(B.z-PZ)>HL+1.3){B.z=PZ+Math.sign(B.z-PZ)*(HL+1.3);B.vz*=-.2;}}
+    else{B.x=clamp(B.x,PX-HW-.5,PX+HW+.5);B.z=clamp(B.z,PZ-HL-.5,PZ+HL+.5);}
+    M.shotAge+=dt;
+  }
+  ballMesh.position.set(B.x,.39+B.y,B.z);
+  if(!M.poss){ballMesh.rotation.x+=B.vz*dt*1.6;ballMesh.rotation.z-=B.vx*dt*1.6;}
+  else{ballMesh.rotation.x+=Math.hypot(B.vx,B.vz)*dt*1.6;}
+}
+function updatePlayers(dt){
+  const M=MATCH,B=BALL,play=M.state==='play';
+  // who goes for the ball
+  const chase=[null,null];
+  if(play)for(let tm=0;tm<2;tm++){
+    if(M.poss&&M.poss.team===tm||M.restart&&M.restart.team!==tm)continue;
+    if(M.target&&M.target.team===tm){chase[tm]=M.target;continue;}
+    const gk=M.restart&&M.restart.type==='goal',slow=Math.hypot(B.vx,B.vz)<9;let bd=1e9;
+    for(const p of players){if(p.team!==tm||p.keeper!==gk&&!(p.keeper&&!M.restart&&slow&&inBox(tm,B.x,B.z)))continue;
+      const d=Math.hypot(p.x-B.x,p.z-B.z);if(d<bd){bd=d;chase[tm]=p;}}
+  }
+  for(const p of players){
+    const d=TEAM[p.team].dir;let tx,tz,sp=4.2;
+    if(!play&&M.state!=='goal'){[tx,tz]=homeSpot(p,true);sp=M.state==='pre'?6:3;}
+    else if(M.state==='goal'){
+      if(p===M.scorer){tx=PX+Math.sign(p.x-PX||1)*(HW-1.2);tz=PZ+d*(HL-1.2);sp=6.5;}
+      else if(p.team===M.scorerTeam&&!p.keeper){tx=M.scorer.x-Math.sin(p.idx)*1.6;tz=M.scorer.z-d*(1+p.idx%3);sp=5.8;}
+      else{[tx,tz]=homeSpot(p,true);sp=2.4;}
+    }
+    else if(p===M.poss){
+      if(p.keeper){tx=p.x;tz=p.z;}
+      else{tx=PX+clamp((p.x-PX)*.8+p.drift*6,-HW+2,HW-2);tz=PZ+d*HL;sp=4.6;}
+    }
+    else if(p===chase[p.team]){tx=B.x+B.vx*.25;tz=B.z+B.vz*.25;sp=6.4;
+      if(p.keeper){tx=clamp(tx,PX-12,PX+12);tz=PZ-d*HL+d*clamp((tz-PZ+d*HL)*d,.6,9.5);}}
+    else if(p.keeper){
+      const gz=PZ-d*(HL-.9);let kx=B.x;
+      if(M.shot&&M.shotAge>.3&&B.vz*d<0){const t=(gz-B.z)/(B.vz||1e-3);if(t>0)kx=B.x+B.vx*t;}
+      tx=clamp(kx,PX-2.2,PX+2.2);tz=gz;sp=M.shot?3.4:3;
+    }
+    else{[tx,tz]=homeSpot(p,false);
+      if(M.restart&&M.restart.team!==p.team){const ox=tx-B.x,oz=tz-B.z,od=Math.hypot(ox,oz)||1;if(od<5){tx=B.x+ox/od*5;tz=B.z+oz/od*5;}}}
+    steer(p,tx,tz,sp,dt);
+  }
+  // the referee keeps up with play from a respectful distance
+  steer(ref,clamp(B.x+(B.x>PX?-6:6),PX-HW+1,PX+HW-1),clamp(B.z+4,PZ-HL+2,PZ+HL-2),4.6,dt);
+  // nobody walks through anybody (or the woodwork, or the ball)
+  for(let i=0;i<ENTS.length;i++){const a=ENTS[i];
+    for(let j=i+1;j<ENTS.length;j++){const b=ENTS[j],dx=b.x-a.x,dz=b.z-a.z,dd=Math.hypot(dx,dz);
+      if(dd<1.05&&dd>1e-4){const push=(1.05-dd)/2,nx=dx/dd,nz=dz/dd;a.x-=nx*push;a.z-=nz*push;b.x+=nx*push;b.z+=nz*push;}}
+    for(const [ox,oz] of OBST){const dx=a.x-ox,dz=a.z-oz,dd=Math.hypot(dx,dz);if(dd<.6&&dd>1e-4){a.x=ox+dx/dd*.6;a.z=oz+dz/dd*.6;}}
+    if(a!==M.poss&&BALL.y<.6){const dx=a.x-BALL.x,dz=a.z-BALL.z,dd=Math.hypot(dx,dz);if(dd<.55&&dd>1e-4){a.x=BALL.x+dx/dd*.55;a.z=BALL.z+dz/dd*.55;}}
+    a.x=clamp(a.x,PX-HW-.6,PX+HW+.6);a.z=clamp(a.z,PZ-HL+.3,PZ+HL-.3);
+  }
+  // pick-ups, tackles and decisions
+  if(!play)return;
+  for(const p of players)p.cool=Math.max(0,p.cool-dt);
+  if(!M.poss){
+    let best=null,bd=.9;
+    for(const p of players){if(p.cool>0||M.restart&&(p.team!==M.restart.team||p.keeper!==(M.restart.type==='goal')))continue;
+      const dd=Math.hypot(p.x-BALL.x,p.z-BALL.z),reach=p.keeper&&!M.restart&&inBox(p.team,BALL.x,BALL.z)?(M.shot?1.02:1.35):.9;
+      if(BALL.y<(reach>1?2.2:1.1)&&dd<reach&&dd<bd+(reach>1?.4:0)){bd=dd;best=p;}}
+    if(best)take(best);
+    return;
+  }
+  const P=M.poss;
+  if(!P.keeper)for(const o of players){if(o.team===P.team||o.cool>0)continue;
+    if(Math.hypot(o.x-P.x,o.z-P.z)<.95){o.cool=.9;if(R()<TEAM[o.team].tackle){take(o);P.cool=.7;return;}}}
+  P.hold-=dt;if(P.hold>0)return;
+  const d=TEAM[P.team].dir,dg=Math.hypot(PX-P.x,PZ+d*HL-P.z);
+  if(P.restart==='corner'){let q=null,bd=1e9;for(const o of players)if(o.team===P.team&&!o.keeper&&o!==P){const dd=Math.hypot(o.x-PX,o.z-(PZ+d*(HL-6.8)));if(dd<bd){bd=dd;q=o;}}
+    if(q){passTo(P,q,true);return;}}
+  if(!P.keeper&&dg<17&&(dg<9||R()<.55)){
+    kickBall(P,PX+rnd(-1,1)*TEAM[P.team].aim,PZ+d*(HL+1),rnd(17,22),rnd(0,4.2));M.shot=true;M.shotAge=0;M.target=null;return;}
+  const q=choosePass(P);if(q)passTo(P,q,P.keeper);else P.hold=.4;
+}
+function steer(p,tx,tz,sp,dt){
+  const dx=tx-p.x,dz=tz-p.z,d=Math.hypot(dx,dz),want=d<.25?0:Math.min(sp,d*2.2),k=Math.min(1,dt*5);
+  p.vx+=((d>1e-4?dx/d*want:0)-p.vx)*k;p.vz+=((d>1e-4?dz/d*want:0)-p.vz)*k;
+  p.x+=p.vx*dt;p.z+=p.vz*dt;
+}
+function posePlayers(dt){
+  for(const p of ENTS){
+    const v=Math.hypot(p.vx,p.vz),want=v>.6?Math.atan2(p.vx,p.vz):Math.atan2(BALL.x-p.x,BALL.z-p.z);
+    let dA=want-p.face;dA=Math.atan2(Math.sin(dA),Math.cos(dA));p.face+=dA*Math.min(1,dt*8);
+    p.ph+=v*dt*3.4;const amp=Math.min(.75,v*.14);
+    p.legs[0].rotation.x=Math.sin(p.ph)*amp;p.legs[1].rotation.x=-Math.sin(p.ph)*amp;
+    p.g.position.set(p.x,.14+Math.abs(Math.sin(p.ph))*amp*.12,p.z);p.g.rotation.y=p.face;
+  }
+}
+function updateMatch(dt){
+  const M=MATCH;M.msgT=Math.max(0,M.msgT-dt);
+  if(M.state==='play'){M.clock+=dt*.5;
+    if(M.half===1&&M.clock>=45){M.state='ht';M.t=7;M.poss=M.restart=M.target=null;M.shot=false;SND.ref(2);}
+    else if(M.clock>=90){M.clock=90;M.state='ft';M.t=14;M.poss=M.restart=M.target=null;M.shot=false;SND.ref(3);}}
+  else if(M.state==='pre'){M.t-=dt;
+    if(M.t<=0&&(M.t<-6||players.every(p=>{const [x,z]=homeSpot(p,true);return Math.hypot(p.x-x,p.z-z)<1.6;}))){
+      M.state='play';const k=players[M.kick*11+9];take(k);k.hold=.6;SND.ref(1);}}
+  else if(M.state==='goal'){M.t-=dt;if(M.t<=0)kickoff(1-M.scorerTeam);}
+  else if(M.state==='ht'){M.t-=dt;if(M.t<=0){M.half=2;M.clock=45;kickoff(1-M.first);}}
+  else if(M.state==='ft'){M.t-=dt;if(M.t<=0)newMatch();}
+  updateBall(dt);updatePlayers(dt);posePlayers(dt);
+}
+newMatch();
+for(const p of players)[p.x,p.z]=homeSpot(p,true);ref.x=PX+8;ref.z=PZ+4;
+
+/* ---------- scoreboard, floodlights, crowd ---------- */
+let lastScr='';
+function drawScreen(){
+  const M=MATCH,min=Math.min(90,Math.floor(M.clock)+1);
+  const sub=M.msgT>0?M.msg:M.state==='ht'?'HALF TIME':M.state==='ft'?'FULL TIME':M.state==='pre'&&M.clock===0?'KICK OFF':min+"'";
+  const key=SIM.match?M.score.join('-')+'|'+sub:'idle';if(key===lastScr)return;lastScr=key;
+  const g=scrCv.getContext('2d'),W=512,H=208;
+  g.fillStyle='#050608';g.fillRect(0,0,W,H);g.textAlign='center';g.textBaseline='middle';
+  if(!SIM.match){
+    for(let i=0;i<16;i++){g.fillStyle=i%2?'#f4f4f4':'#111';g.fillRect(i*32,0,32,H);}
+    g.fillStyle='rgba(0,0,0,.78)';g.fillRect(0,54,W,100);g.fillStyle='#fff';g.font='bold 46px system-ui,sans-serif';g.fillText("ST JAMES' PARK",W/2,88);
+    g.fillStyle='#f5c518';g.font='bold 24px system-ui,sans-serif';g.fillText('HOWAY THE LADS',W/2,130);
+  }else{
+    for(let i=0;i<6;i++){g.fillStyle=i%2?'#111':'#f4f4f4';g.fillRect(18+i*15,18,15,76);g.fillStyle=i%2?'#f4f4f4':'#d4202a';g.fillRect(W-108+i*15,18,15,76);}
+    g.fillStyle='#fff';g.font='bold 30px system-ui,sans-serif';g.fillText('NEW',63,122);g.fillText('SUN',W-63,122);
+    g.font='bold 96px system-ui,sans-serif';g.fillText(M.score[0]+' - '+M.score[1],W/2,70);
+    g.fillStyle='#f5c518';g.font='bold 36px system-ui,sans-serif';g.fillText(sub,W/2,172);
+  }
+  scrTex.needsUpdate=true;
+}
+const floods=[-18,18].map(dz=>{const p=new THREE.PointLight(0xf0f4ff,0,130,2);p.position.set(PX,27,PZ+dz);scene.add(p);return p;});
+function updateStadium(dt,t){
+  const on=SIM.match;
+  for(const o of [...crowdG,awayG,ballMesh,...ENTS.map(p=>p.g)])o.visible=on;
+  if(on)updateMatch(dt);
+  const M=MATCH;M.cheer[0]=Math.max(0,M.cheer[0]-dt);M.cheer[1]=Math.max(0,M.cheer[1]-dt);
+  crowdG.forEach((g,i)=>g.position.y=Math.min(1,M.cheer[0])*Math.abs(Math.sin(t*8+i*1.3))*.45);
+  awayG.position.y=Math.min(1,M.cheer[1])*Math.abs(Math.sin(t*8.5))*.45;
+  const f=LIGHT.flood=lerp(LIGHT.flood||0,SIM.flood?1:0,Math.min(1,dt*3));
+  MAT.flood.color.setScalar(lerp(.45,1.3+2*LIGHT.n,f));
+  floods.forEach(p=>p.intensity=f*LIGHT.n*2600);
+  drawScreen();
+}
+controlBox(-235,72,"⚽ ST JAMES' PARK",[{k:'match',u:-27,name:'MATCH|DAY'},{k:'flood',u:-15,name:'FLOOD-|LIGHTS'}],
+  [{id:'kickoff',u:-1,col:0x3ba55c,name:'KICK|OFF'},{id:'howay',u:12,col:0xf4f4f4,name:'HOWAY|THE LADS'},{id:'view',u:25,col:0xa06ae0,name:'LAYOUT|VIEW'}]);
+
 /* ================= finalise static scenery ================= */
 put(S.build());
 
 /* ================= lights ================= */
 const sun=new THREE.DirectionalLight(0xffffff,3);
 sun.castShadow=true;sun.shadow.mapSize.set(4096,4096);
-Object.assign(sun.shadow.camera,{left:-268,right:268,top:150,bottom:-150,near:10,far:1600});sun.target.position.set(62,0,0);
+Object.assign(sun.shadow.camera,{left:-330,right:330,top:150,bottom:-150,near:10,far:1600});sun.target.position.set(0,0,0);
 sun.shadow.bias=-.0004;sun.shadow.normalBias=.04;
 scene.add(sun,sun.target);
 const hemi=new THREE.HemisphereLight(0x9fc4ff,0x6b5a45,1);scene.add(hemi);
@@ -1528,7 +2046,7 @@ function frame(){
   const dt=Math.min(clock.getDelta(),.05);T+=dt;
   if(SIM.jump!==null){const d=((SIM.jump-SIM.time)%24+24)%24;const st=Math.min(d,dt*4);SIM.time=(SIM.time+st)%24;if(d<=dt*4)SIM.jump=null;}
   else SIM.time=(SIM.time+dt*SIM.timeRate*SIM.timeRate*1.3)%24;
-  updateTrains(dt);updateTurntable(dt);updateVehicles(dt);updateHarbour(dt,T);updateFair(dt,T);updateFork(dt);updateAirport(dt,T);
+  updateTrains(dt);updateTurntable(dt);updateVehicles(dt);updateHarbour(dt,T);updateFair(dt,T);updateFork(dt);updateAirport(dt,T);updateStadium(dt,T);
   sails.rotation.z-=dt*.7;beam.rotation.y+=dt*1.1;
   for(const f of animators)f(dt,T);
   updateSmoke(dt);updateSky(dt,T);updatePanel(dt);updateCamera();
@@ -1536,7 +2054,7 @@ function frame(){
   if(first){first=false;document.getElementById('load').remove();}
   requestAnimationFrame(frame);
 }
-window.__SIM=SIM;window.__FL=FL;window.__JET=jet;window.__VIEW=VIEW;window.__EYE=EYE;
+window.__SIM=SIM;window.__FL=FL;window.__MATCH=MATCH;window.__JET=jet;window.__VIEW=VIEW;window.__EYE=EYE;
 const panelLamp=new THREE.PointLight(0xfff0d8,900,120,2);panelLamp.position.set(0,32,150);scene.add(panelLamp);
 updateCamera();requestAnimationFrame(frame);
 </script>
